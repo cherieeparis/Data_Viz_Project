@@ -1,0 +1,176 @@
+---
+title: "dataviz-hw1-rx2245"
+output: html_document
+date: "2024-02-14"
+---
+Assignment 1 - Dating
+
+Import all packages
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(DT)
+library(plotly)
+library(stringr)
+data <- readRDS("~/dataviz/HCMST_couples.rds")
+```
+
+Question 1: Visualize how the mode of meeting for the first time has changed over the years.
+
+Chart 1 this graph is a  line chart to draw a trend of the type of people first meet over the years, it included all types of the meeting.
+Applied this graph, it was able to show all trend of people's first meet. With the color add-in, we able to observe the change by years as well as the popular meeting type. 
+
+```{r}
+meeting_counts <- data %>% count(Q21A_Year, meeting_type)
+meeting_counts_filtered <- meeting_counts %>% filter(Q21A_Year != "Refused")
+meeting_counts_filtered$Q21A_Year <- as.numeric(as.character(meeting_counts_filtered$Q21A_Year))
+breaks <- seq(1950, 2025, by = 10)
+ggplot(data = meeting_counts_filtered, aes(x = Q21A_Year, y = n, group = meeting_type, color = meeting_type)) +
+  ggtitle("Dating trends over years") +
+  geom_line() +
+  scale_x_continuous(breaks = breaks, labels = as.character(breaks))
+```
+Chart 2: this graph draw a bar chart that provide each type of meeting changed by years. With individual bar box, it was able to identify the trend of various meeting type case by case. With the line trend added, it helped the reader to recognize the change as well since some are flatted and some are curved. 
+# for min year, i use the min-1 to have even distrubuted in year for better visulization, that's what i could do, but please have suggestion for any better way, thank you!
+
+```{r}
+min_year <- min(meeting_counts_filtered$Q21A_Year, na.rm = TRUE) - 1   
+max_year <- max(meeting_counts_filtered$Q21A_Year, na.rm = TRUE) 
+breaks <- seq(min_year, max_year, by = 10)
+
+# Generate colors for each level of Q21A_Year
+unique_years <- unique(meeting_counts_filtered$Q21A_Year)
+colors <- scales::hue_pal()(length(unique_years))
+
+# Create a named vector with colors for each level of Q21A_Year
+color_mapping <- setNames(colors, unique_years)
+
+ggplot(data = meeting_counts_filtered, aes(x = factor(Q21A_Year), y = n, fill = factor(Q21A_Year))) +
+  geom_bar(stat = "identity", position = "identity", color = "black") +
+  geom_smooth(aes(group = 1), method = "lm", se = FALSE, color = "pink", alpha = 0.2) +
+  facet_wrap(~ meeting_type, ncol= 4) +
+  ggtitle("Frequency of Dating type changing by Year") +
+  xlab("Year") +
+  ylab("Frequency") +
+  scale_x_discrete(drop = FALSE, breaks = breaks) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.x = element_text(size = 10),
+        axis.title.y = element_text(size = 10),
+        strip.text = element_text(size = 10),
+        legend.position = "none") +
+  scale_fill_manual(values = color_mapping, guide = "none") + # Use color mapping
+  coord_cartesian(ylim = c(0, max(meeting_counts_filtered$n) * 1.1)) +
+  theme_minimal()
+
+```
+Question 2: Create one (1) visualization to show the relationship between a respondent’s age and their partner’s age, accounting for the gender of the respondent? Identify the main pattern in the graph via an annotation directly added to the plot.
+
+I applied scatter plot to draw the relationship between the couple's age by the gender. It shown that respondent's age and partner's age have positive correlation by gender, which means the couple's age are closely when they meet.
+
+```{r}
+ggplot(data, aes(x=ppage, y=Q9, color=ppgender)) +
+  geom_point(alpha =0.5) +
+  geom_smooth(method = 'lm', se = FALSE) +
+  labs(x="Respondent's Age", y="Partner's Age", title="Relationship between respondent's age and  partner’s age by Gender") +
+  scale_color_manual(values = c("pink", "purple")) +
+  annotate("text", x = 30, y = 12.5, label = "Positive correlation between respondent's and partner's age by gender") +
+  theme_minimal()
+```
+
+Question 3: Explore how the political affiliation of partners affects how couples meet and stay together.
+
+Chart 1:
+I applied bar chart to draw the how respondent and partner's political affiliation looks like. It shown that across the survey, the respondent are more likely recognized self as more democrat and their partner are more likely recognized self as independent.
+
+```{r}
+combined_party <- data.frame(Party_Affiliation = c(data$partyid7, data$w6_q12),
+                            Group = rep(c("Respondent", "Partner"), each = nrow(data)))
+
+# Count the occurrences of each party affiliation for respondents and partners
+counts <- table(combined_party$Party_Affiliation, combined_party$Group)
+
+# Convert the table to a data frame
+counts_df <- as.data.frame(counts)
+colnames(counts_df) <- c("Party_Affiliation", "Group", "Count")
+
+# Create the grouped bar plot
+ggplot(counts_df, aes(x = Party_Affiliation, y = Count, fill = Group)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = Count), vjust = -0.5, size = 3, position = position_dodge(width = 0.9)) +
+  labs(x = "Party Affiliation", y = "Count", title = "Comparison of Respondent and Partner Party Affiliations") +
+  scale_fill_manual(values = c("blue", "red")) + 
+  theme_minimal()
+```
+Chart 2: For this chart, I applied box plot that draw relationship duration in terms of partner's political affiliation. It shown that partner who are undecided or independent are more likely to keep their relationship longer. 
+```{r}
+ggplot(data, aes(x = w6_q12, y = duration)) +
+  geom_boxplot() +
+  coord_flip() +
+  labs(x = "Partner's Political Affiliation", y = "Relationship Duration (Days)", title = "Relationship Duration by Partner's Political Affiliation") +
+  theme_minimal() +
+  geom_jitter(shape=21, 
+              color="black",
+              position = position_jitter(w = 0.1))
+```
+
+Question 4
+
+Chart 1: 
+For this chart i create a bar chart to show which month does the couple have their first meet. We can observe that couple were more likely initial meet each other in September of the year.
+```{r}
+ggplot(subset(data, Q21A_Month != "Refused" ), aes(x = Q21A_Month, fill = Q21A_Month)) + 
+  geom_bar() +
+  labs(title = "Month First Meet", x = "Month", y = "Count") + 
+  theme_minimal()
+```
+
+Chart 2: I want to observe what age when the couple usually to meet their female or male partner. In this chart, we can observe that people were more likely first meet their female or male partner when they between 17-21 years old. In question 5, I will add interactive with plotly to make it more readable. 
+
+```{r}
+ggplot(data, aes(x = age_when_met, fill = ppgender)) + 
+  geom_bar(width = 0.9, position = position_dodge(width=0.9)) +
+  labs(title = "Month First Meet", x = "Month", y = "Count") + 
+  theme_minimal()
+```
+
+
+Question 5:
+
+Chart 1:
+```{r}
+gg1 <- ggplot(data, aes(x = ppage, y = Q9, color = ppgender)) +
+  geom_point(alpha = 0.5, size = 2) + 
+  geom_smooth(method = 'lm', color = "black", lwd = 1, se = FALSE) +
+  labs(x="Respondent's Age", y="Partner's Age", title="Relationship between respondent's age and  partner’s age by Gender") +
+  theme(legend.position = "none") +
+  scale_color_manual(values = c("pink", "purple")) +
+  theme_minimal()
+ggplotly(gg1)
+```
+
+
+Chart 2:
+```{r}
+gg2 <- ggplot(data, aes(x = age_when_met, fill = ppgender)) + 
+  geom_bar(width = 0.9, position = position_dodge(width=0.9)) +
+  labs(title = "Month First Meet", x = "Month", y = "Count") + 
+  theme_minimal()
+ggplotly(gg2)
+```
+
+
+Question 6: I chose the variable we used in above and rename it since thats the most interested variable i had used so far in this data. 
+```{r}
+selected_data <- subset(data, select = c(Q21A_Year, Q21A_Month, ppage, Q9, ppgender, partyid7, w6_q12, Q10, Q11))
+names(selected_data) <- c("first met year","first met month", "age", "partner age", "gender", "party", "partner party", "partner education", "partner mother education")
+
+datatable(selected_data)
+
+pretty_headers <- gsub("[.]", " ", colnames(selected_data)) %>% str_to_title()
+
+data %>% datatable(rownames = FALSE,
+                   colnames = pretty_headers, 
+                   filter = list(position = "top"), 
+                   options = list(language = list(sSearch = "Filter:"))) 
+```
