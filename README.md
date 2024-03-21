@@ -1,2 +1,3 @@
-# Xu_Cherie
-assignment submission
+# Data Visulization Practical Project
+1. xxx
+2. geographic data 
