@@ -1,0 +1,434 @@
+---
+title: "assigment3-rx2245-dataviz"
+output: html_document
+author: Cherie Xu
+date: "2024-03-30"
+---
+
+```{r import data, include = FALSE, echo=FALSE}
+dialogue<- read.csv("/Users/yemei/Documents/GitHub/course_content/Exercises/09_moviescripts_GRADED/data/dialogue.csv")
+tagged<- read.csv("/Users/yemei/Documents/GitHub/course_content/Exercises/09_moviescripts_GRADED/data/tagged.csv")
+metadata<- read.csv("/Users/yemei/Documents/GitHub/course_content/Exercises/09_moviescripts_GRADED/data/metadata.csv")
+```
+
+```{r import packages, include = FALSE, echo=FALSE}
+library(ggplot2)
+library(tm)
+library(quanteda)
+library(tidytext)
+library(wordcloud)
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(quanteda.textstats)
+library(quanteda)
+library(textdata)
+library(stm)
+
+#since the provided dialogue file already have the data that we need from tagged file, so I directly applied dialogue file in the follwing analysis. 
+```
+
+## Dialogue
+
+### a) Most common words
+
+#### Analyze the dialogue content of movie scripts. Transform the dialogue into a tidy data frame, breaking down the text into individual words, removing common stop words and other unnecessary elements. As needed, use the cleaning functions introduced in lecture (or write your own in addition) to remove unnecessary words (stop words), syntax, punctuation, numbers, white space, etc. Visualize the 20 most frequently used words in the dialogues to gain insights into the core thematic elements of the scripts.
+
+To visualize the 20 most frequently used words in the dialogue from the movies, i first tokenize the dialogue text, then break down the dialouge into individual word by removing common stop words from the smart source as well as removing other unnecessary elements. Additionally, I used the customize stop words list to clean the tokenization and get the final list. For visualization, i applied bar chart to show the frequency of top 20 words. As we can seen that, back, good, time, man, make are top five used words. It makes sense as our daily communication also used these words a lot. Overall, the words list have netural toward positive attitude as we can see the words like 'love', 'good', 'life', but also have bad word like 'shit'.
+
+```{r, echo=FALSE}
+# transform the dialogue into a tidy data frame
+# break down the text into individual words, removing common stop words
+# and other unnecessary elements (use cleaning function)
+# lastly, visualize 20 most frequently used words
+
+# tokenize the dialogue text for all movies 
+tidy_dialogue <- dialogue %>%
+  unnest_tokens(word, Dialogue)
+
+# remove stop words and unnecessary elements
+# applied smart for stop words
+smart_stop_words <- get_stopwords(source = 'smart')
+tidy_dialogue_clean <- tidy_dialogue %>%
+  anti_join(smart_stop_words, by = "word") %>% # Remove stop words
+  filter(!str_detect(word, "^\\d+$_.")) %>% # Remove purely numerical tokens
+  filter(str_detect(word, "[a-z]"))
+
+#customize stop words list too, since some words dont make sense
+custom_stop_words <- c("go", "going", "can", "let", "us", "got", "hey", "yes", "em", "mr", "us", "gotta", "getting", "oh", "gonna", "yeah")
+
+# Filter out these custom stop words in addition to the standard stop words, as the final version
+tidy_dialogue_clean <- tidy_dialogue_clean %>%
+  filter(!word %in% custom_stop_words)
+
+#visualization 
+tidy_dialogue_clean %>%
+  count(word, sort = TRUE) %>%
+  top_n(20, n) %>%
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  geom_text(aes(label = n), position = position_dodge(width = 0.9), hjust = -0.1, size = 2.5) +
+  labs(title = "Top 20 Most Frequent Words in Movie Dialogue", x = "Word", y = "Frequency") +
+  theme_minimal()
+```
+
+### b) words cloud
+
+#### Create word clouds for a selection of movies to visualize the most prevalent themes or phrases. Choose a set of movies, either randomly or based on specific criteria, and use their script dialogues to generate the clouds.
+
+I am particularly interested in action movie, so i did word clouds based on action movies' word. I set the word frequency range between from 20 to 300. As we can observed, the word "know", "like", "just", "get", "one", "now" capture our eyes promptly.
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+# filter by genres 'Action'
+action <- metadata %>% 
+  filter(grepl('Action', genres, ignore.case = TRUE)) %>%
+  select(movie_id = file_name)
+#print(action)
+
+# action movie dialogues data
+action_dialogues <- dialogue %>%
+  filter(movie_id %in% action$movie_id)
+
+# Preprocess the dialogue (tokenize, remove stop words)
+tidy_action <- action_dialogues %>%
+  unnest_tokens(word, Dialogue) %>%
+  anti_join(get_stopwords(), by = "word") %>%
+  filter(!str_detect(word, "^\\d+$_.")) %>%
+  filter(str_detect(word, "[a-z]"))
+
+#take some irrelevant words off
+custom_stop_words <- c("go", "going", "can", "let", "us", "got", "hey", "yes", "em", "mr", "us", "gotta", "getting", "oh", "gonna")
+
+# Filter out these custom stop words in addition to the standard stop words
+tidy_action <- tidy_action %>%
+  filter(!word %in% custom_stop_words)
+
+# word frequency 
+word_frequency <- tidy_action %>%
+  count(word, sort = TRUE)
+
+# Generate the word cloud
+wordcloud(words = word_frequency$word, freq = word_frequency$n,
+          min.freq = 30, 
+          max.words = 200, 
+          random.order = FALSE, 
+          rot.per = 0.35, 
+          colors = brewer.pal(8, "Dark2"),
+          scale = c(3, 0.4))
+
+```
+
+### c) success in words
+
+#### Investigate the correlation between specific words or phrases in movie scripts and their success, measured by viewer ratings or popularity. Utilize a pyramid plot to compare the frequency of the top 10-20 words in both successful and unsuccessful movies.
+
+I want to use quantile vote value to determine whether successful or not. In terms of quantile, we set that the range above 75% count as successful movies and below 25% count as unsuccessful movies, create a new column status for it. The pyramid plot is formed to compare the frequency of the top 20 words in both successful and unsuccessful movies. With this graph, we can clear observe how the word could represent status of a movie. As we can seen, "back", "good","man","time" appear most oftenly on both successful and unsuccessful movies. For words "thought, guy, god, shit, she's" only appear in unsuccessful movies. for words "sir, talk, home, put, things" only appear in successful movie as we defined. While, the bias of defining movie status by quantile could affect the result as the number of successful and unsuccessful movie wasnt take into the consideration.
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+# use quantities vote value to determine whether successful or not
+quantiles <- quantile(metadata$vote_average, probs = c(0.25, 0.50, 0.75, 1.00), na.rm = TRUE)
+
+# in terms of quantile, we set that the range above 75% count as successful movies and below 25% count as unsuccessful movies, create a new column status for it.
+metadata$status <- ifelse(metadata$vote_average > quantiles[3], 'Successful',
+                          ifelse(metadata$vote_average < quantiles[1], 'Unsuccessful', 'Neutral'))
+
+# left join with status and preprocess dataset
+tidy_dialogue_clean_c <- tidy_dialogue_clean %>%
+  mutate(file_name = movie_id)
+tidy_dialogue_clean_c <- tidy_dialogue_clean_c %>%
+  left_join(metadata %>% select(file_name, status), by = "file_name")
+
+# Filter successful and unsuccessful dialogues of the frequency of the top 20 words
+successful_words <- tidy_dialogue_clean_c %>% 
+  filter(status == "Successful") %>% 
+  count(word, sort = TRUE) %>%
+  top_n(20, n)  
+
+unsuccessful_words <- tidy_dialogue_clean_c %>%
+  filter(status == "Unsuccessful") %>%
+  count(word, sort = TRUE) %>%
+  top_n(20, n)
+
+# pyramid plot
+successful_words$status <- 'Successful'
+unsuccessful_words$status <- 'Unsuccessful'
+unsuccessful_words$n <- -unsuccessful_words$n  
+words_combined <- rbind(successful_words, unsuccessful_words)
+
+ggplot(words_combined, aes(x = reorder(word, n), y = n, fill = status)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_minimal() +
+  labs(y = "Word Frequency", x = "Words", title = "Top Words in Successful vs. Unsuccessful Movies") +
+  scale_fill_manual(values = c("Successful" = "blue", "Unsuccessful" = "red")) +
+  geom_text(aes(label = abs(n)), hjust = -0.1, size = 2)
+```
+
+### d) Profanity
+
+### Using this list of profanities calculate a profanity score for each movie, indicating how often these words were used in the script. Visualize the Top 10 movies with most profanity, show how the use of profanity has changed over time (using the movie release date).
+
+In terms of profanity word list, we can seen the movie casino earned the mostly profanity score. Within the year change, the profanity use in movies changed a lot too. Around the year range from 1997 to 1999, there is a increasing trend of profanity use in the movies. Then there was a dramatically drop on 2000 and raise on 2010 to 2011. The number of movies in each year could affect this result a lot.
+
+```{r,echo=FALSE, warning=FALSE, message = FALSE}
+url <- 'https://www.cs.cmu.edu/~biglou/resources/bad-words.txt'
+profanity<- readLines(url, warn = FALSE)
+
+profanity_scores <- tidy_dialogue_clean %>%
+  filter(word %in% profanity) %>%
+  group_by(movie_id) %>%
+  summarise(profanity_count = n()) %>%
+  ungroup()
+
+# Join with metadata to get movie release dates
+profanity_scores <- profanity_scores %>%
+  left_join(metadata %>% select(file_name, release_date, imdb_release_date), by = c("movie_id"="file_name"))
+
+#Visualize the Top 10 Movies with Most Profanity
+top_profanity_movies <- profanity_scores %>%
+  arrange(desc(profanity_count)) %>%
+  head(10)
+
+ggplot(top_profanity_movies, aes(x = reorder(movie_id, profanity_count), y = profanity_count)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Top 10 Movies with Most Profanity", x = "", y = "Profanity Count") +
+  geom_text(aes(label = profanity_count), position = position_dodge(width = 0.9), hjust = -0.1, size = 2.5) +
+  theme_minimal()
+
+# the use of profanity has changed over time (using the movie release date). 
+# Aggregate profanity counts by year
+profanity_by_year <- profanity_scores %>%
+  group_by(imdb_release_date) %>%
+  summarise(total_profanity = sum(profanity_count))
+
+ggplot(profanity_by_year, aes(x = imdb_release_date, y = total_profanity)) +
+  geom_line(color = "steelblue") +  
+  geom_point(color = "darkred") +  
+  labs(title = "Profanity Use in Movies Over Time",
+       x = "Year",
+       y = "Total Profanity Count") +
+  theme_minimal()
+
+```
+
+### e) Simplicity is a Virtue
+
+#### Examine the impact of script simplicity on its success by calculating a readability score (Flesch Reading Ease, Flesch-Kincaid, or other measures) for the scripts. Analyze and visualize the relationship between the readability of the scripts and their IMDb vote average, providing commentary on your findings.
+
+For first visualization, the majority movie earned vote average between 5.0-9.0, and Flesch-Kincaid Ease Score is located at 81-98 range by eyeballing. There is a slightly positive correlation between vote average and Flesch-Kincaid Ease Score. For second visualization, Flesch-Kincaid Ease Score is located at 1-3.5 range by eyeballing. There is a slightly negative correlation between vote average and Flesch-Kincaid Grade Level.
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+# aggregate dialogue together for each movie script
+movie_scripts <- dialogue %>%
+  group_by(movie_id) %>%
+  summarise(script = paste(Dialogue, collapse = " ")) %>%
+  ungroup()
+
+corpus_scripts <- corpus(movie_scripts$script)
+
+# Calculate readability scores
+readability_scores <- textstat_readability(corpus_scripts, measure = c('Flesch', 'Flesch.Kincaid', 'meanSentenceLength', 'meanWordSyllables'))
+
+# Add movie_id back to the readability scores for merging
+readability_scores$movie_id <- movie_scripts$movie_id
+
+# Merge readability scores with metadata
+readability_votescore <- readability_scores %>%
+  left_join(metadata %>% select(file_name, vote_average), by = c("movie_id"="file_name"))
+
+# Visualize Flesch-Kincaid Ease Score vs. IMDb Vote Average
+ggplot(readability_votescore, aes(x = Flesch, y = vote_average)) +
+    geom_point() +
+    geom_smooth(method = "lm", color = "blue", se = FALSE) +
+    labs(title = "Flesch Reading Ease vs. IMDb Vote Average",
+         x = "Flesch Reading Ease Score", y = "IMDb Vote Average") +
+    theme_minimal()
+
+# Visualize Flesch-Kincaid Grade Level vs. IMDb Vote Average
+ggplot(readability_votescore, aes(x = Flesch.Kincaid, y = vote_average)) +
+    geom_point() +
+    geom_smooth(method = "lm", color = "blue", se = FALSE) +
+    labs(title = "Flesch-Kincaid Grade Level vs. IMDb Vote Average",
+         x = "Flesch-Kincaid Grade Level", y = "IMDb Vote Average") +
+    theme_minimal()
+
+
+```
+
+## Genres
+
+### a) Defining words
+
+#### Identify and visualize the most defining words across different movie genres using the TF-IDF measure. Utilize the genre variable from the movie metadata to differentiate and analyze the unique lexical footprint of each genre. Provide a visualization to highlight how different genres are defined by different words.
+
+I firstly re-category each movie genre as some movies have more than one type of genre. Then I calculate the TF-IDF Scores and visualize 5 words along with highest TF-IDF Scores Across Genres and 5 words along with lowest TF-IDF Scores Across Genres. As we can observe, the top five TF-IDF score seems like person's name, as they are rare words shown on movies. For five lowest score value,
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE, fig.width=10, fig.height=8}
+# expand all genres 
+expanded_genres <- metadata %>% separate_rows(genres, sep = ",\\s*")
+# unique genre 
+generes_list <- unique(expanded_genres$genres)
+# leftjoin with tidy_dialogue_clean
+genere_dialogue_a <- tidy_dialogue_clean %>%
+  left_join(expanded_genres %>% select(file_name,vote_average,genres), by = c("movie_id"="file_name"))
+
+# Calculate word counts by genre
+word_counts_by_genre <- genere_dialogue_a %>%
+  count(genres, word, name = "n") %>%
+  filter(!is.na(word), !is.na(genres)) %>%
+  ungroup()
+
+# Calculate TF-IDF
+tf_idf <- word_counts_by_genre %>%
+  bind_tf_idf(word, genres, n)
+
+top_words_by_genre <- tf_idf %>%
+  group_by(genres) %>%
+  top_n(5, tf_idf) %>% # use top 5 words based on tf_idf score
+  ungroup() %>%
+  arrange(genres, desc(tf_idf))
+
+ggplot(top_words_by_genre, aes(x = fct_reorder(word, tf_idf), y = log10(tf_idf))) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~ genres, scales = "free_y") +
+  labs(title = "The 5 highest TF-IDF Scores Across Genres", 
+       y = "Log of TF-IDF Score", 
+       x = "Words") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 8), 
+        strip.text.x = element_text(size = 9))
+```
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE, fig.width=10, fig.height=8}
+
+top_words_by_genre <- tf_idf %>%
+  group_by(genres) %>%
+  filter(tf_idf > 0) %>%
+  arrange(desc(n)) %>%  # Sort in descending order
+  slice_head(n = 5) %>%      # Select the top 5
+  ungroup()
+
+# Now plot. 
+ggplot(top_words_by_genre, aes(x = word, y = log10(tf_idf)/2)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~ genres, scales = "free_y") +
+  labs(title = "The 5 lowest TF-IDF Scores Across Genres", 
+       y = "Log of TF-IDF Score", 
+       x = "Words") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 7), 
+        strip.text.x = element_text(size = 7))
+```
+
+### b) Emotions
+
+#### Now, use the NRC Word-Emotion Association Lexicon in the tidytext package to identify a larger set of emotions (e.g. anger, anticipation, disgust, fear, joy, sadness, surprise, trust). Again, visualize the relationship between the use of words from these categories and the movie genre. What is your finding?
+
+We can observe that each genre use most frequency on positive emotion words, and second high frequency score is negative emotion. For other emotion type, they slightly change varying by genres.
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE, fig.width=10, fig.height=8}
+
+nrc_lexicon <- get_sentiments("nrc")
+# Join the tokenized dialogue data with the NRC lexicon to get emotions
+emotion_words <- genere_dialogue_a %>%
+  inner_join(nrc_lexicon, by = "word")
+#Count the Frequency of Emotions by Genre
+emotion_frequency_by_genre <- emotion_words %>%
+  count(genres, sentiment) %>%
+  group_by(genres) %>%
+  mutate(total = sum(n)) %>%
+  ungroup() %>%
+  mutate(frequency = n / total) 
+
+ggplot(emotion_frequency_by_genre, aes(x = sentiment, y = frequency, fill = sentiment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ genres, scales = "free_x", ncol = 4) +
+  labs(title = "Frequency of Emotions in Movie Genres", 
+       x = "Emotion", 
+       y = "Frequency") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6),
+        legend.position = "bottom",
+        strip.text.x = element_text(size = 6))
+
+```
+
+## Topic Modeling (bonus)
+
+### Conduct a topic modeling analysis using LDA or STM on a manageable subset of the movie scripts. Create visualizations that illustrate the significant themes or topics uncovered in the analysis, and discuss the insights gained from the topic model.
+
+select movie list from 2010 which come with 34 movies released on 2010 to form 8 topic
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+#preprocessing
+
+movies_2010 <- metadata %>%
+  filter(imdb_release_date == 2010)
+
+dialogue_clean_movie2010 <- tidy_dialogue_clean %>%
+  filter(movie_id %in% movies_2010$file_name)
+
+unique_movie_ids <- unique(dialogue_clean_movie2010$movie_id)
+print(unique_movie_ids)
+
+documents <- dialogue_clean_movie2010 %>%
+  group_by(movie_id) %>%
+  summarise(text = paste(word, collapse = " ")) %>%
+  ungroup() %>%
+  pull(text)
+
+# Create a corpus from the combined text
+corp <- corpus(documents)
+
+tokens_obj <- tokens(corp, what = "word", remove_punct = TRUE, remove_numbers = TRUE)
+
+# Remove stopwords
+tokens_clean <- tokens_remove(tokens_obj, stopwords("english"))
+
+# Create a Document-Feature Matrix (DFM)
+dfm_clean <- dfm(tokens_clean)
+
+# Remove features with dfm_remove
+dfm_final <- dfm_remove(dfm_clean, pattern = c(stopwords("english")))
+
+# Convert the DFM to STM
+documents_stm <- convert(dfm_final, to = "stm")
+
+stmFit <- stm(documents = documents_stm$documents, vocab = documents_stm$vocab, K = 8, max.em.its = 50, seed = 123)
+
+summary(stmFit)
+labelTopics(stmFit)
+```
+
+----- visualization
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE, fig.width=10, fig.height=8}
+
+# Iterate through each topic
+for (i in 1:8) {
+  # Extract top terms for the current topic
+  top_terms <- tidy(stmFit, matrix = "beta") %>%
+    group_by(topic) %>%
+    top_n(10, beta) %>%
+    ungroup() %>%
+    filter(topic == i)
+  
+  # Plotting
+  plot <- ggplot(top_terms, aes(x = reorder(term, beta), y = beta, fill = topic)) +
+    geom_col(show.legend = FALSE) +
+    coord_flip() +
+    labs(x = "Terms", y = "Beta", title = paste("Top Words in Topic", i)) +
+    theme_minimal()
+  
+  # Print the plot
+  print(plot)
+}
+
+
+```
+
+\`\`\`
