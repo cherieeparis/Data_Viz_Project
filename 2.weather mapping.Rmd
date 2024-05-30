@@ -6,6 +6,7 @@ date: "2024-03-06"
 ---
 
 ```{r import data, include = FALSE, echo=FALSE}
+# change to your local path
 storm_data<- read.csv("storms.csv")
 ```
 
@@ -332,5 +333,4 @@ leaflet(data = overone_death_event) %>%
 
 ```
 
-## 3. Severe Events and Cities
-##### tried , code doesnt work....
+

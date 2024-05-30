@@ -6,9 +6,10 @@ date: "2024-03-30"
 ---
 
 ```{r import data, include = FALSE, echo=FALSE}
-dialogue<- read.csv("/Users/yemei/Documents/GitHub/course_content/Exercises/09_moviescripts_GRADED/data/dialogue.csv")
-tagged<- read.csv("/Users/yemei/Documents/GitHub/course_content/Exercises/09_moviescripts_GRADED/data/tagged.csv")
-metadata<- read.csv("/Users/yemei/Documents/GitHub/course_content/Exercises/09_moviescripts_GRADED/data/metadata.csv")
+# change to your own path
+dialogue<- read.csv("dialogue.csv")
+tagged<- read.csv("tagged.csv")
+metadata<- read.csv("metadata.csv")
 ```
 
 ```{r import packages, include = FALSE, echo=FALSE}
@@ -25,7 +26,7 @@ library(quanteda)
 library(textdata)
 library(stm)
 
-#since the provided dialogue file already have the data that we need from tagged file, so I directly applied dialogue file in the follwing analysis. 
+#since the provided dialogue file already have the data that we need from tagged file, so I directly applied dialogue file in the following analysis. 
 ```
 
 ## Dialogue
@@ -34,7 +35,7 @@ library(stm)
 
 #### Analyze the dialogue content of movie scripts. Transform the dialogue into a tidy data frame, breaking down the text into individual words, removing common stop words and other unnecessary elements. As needed, use the cleaning functions introduced in lecture (or write your own in addition) to remove unnecessary words (stop words), syntax, punctuation, numbers, white space, etc. Visualize the 20 most frequently used words in the dialogues to gain insights into the core thematic elements of the scripts.
 
-To visualize the 20 most frequently used words in the dialogue from the movies, i first tokenize the dialogue text, then break down the dialouge into individual word by removing common stop words from the smart source as well as removing other unnecessary elements. Additionally, I used the customize stop words list to clean the tokenization and get the final list. For visualization, i applied bar chart to show the frequency of top 20 words. As we can seen that, back, good, time, man, make are top five used words. It makes sense as our daily communication also used these words a lot. Overall, the words list have netural toward positive attitude as we can see the words like 'love', 'good', 'life', but also have bad word like 'shit'.
+To visualize the 20 most frequently used words in the dialogue from the movies, i first tokenize the dialogue text, then break down the dialogue into individual word by removing common stop words from the smart source as well as removing other unnecessary elements. Additionally, I used the customize stop words list to clean the tokenization and get the final list. For visualization, i applied bar chart to show the frequency of top 20 words. As we can seen that, back, good, time, man, make are top five used words. It makes sense as our daily communication also used these words a lot. Overall, the words list have neutral toward positive attitude as we can see the words like 'love', 'good', 'life', but also have bad word like 'shit'.
 
 ```{r, echo=FALSE}
 # transform the dialogue into a tidy data frame

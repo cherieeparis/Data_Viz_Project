@@ -21,8 +21,9 @@ library(tidyr)
 
 ```{r import dataset, include=FALSE}
 # read csv file 
-b <- read.csv('/Users/yemei/Documents/GitHub/course_content/Exercises/11_billboard_GRADED/billboard.csv') 
-a <- read.csv('/Users/yemei/Documents/GitHub/course_content/Exercises/11_billboard_GRADED/audio_features.csv') 
+# change to own path
+b <- read.csv('billboard.csv') 
+a <- read.csv('audio_features.csv') 
 
 # data processing
 # Convert week_id from chr to date type
