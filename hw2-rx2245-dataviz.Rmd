@@ -1,0 +1,336 @@
+---
+title: "Assignment 2: Mapping Severe Weather Events"
+author: Cherie Xu (rx2245)
+output: html_document
+date: "2024-03-06"
+---
+
+```{r import data, include = FALSE, echo=FALSE}
+storm_data<- read.csv("/Users/yemei/Documents/GitHub/course_content/Exercises/07_severe_weather_GRADED/data/storms.csv")
+```
+
+```{r import packages, include = FALSE, echo=FALSE}
+library(ggplot2)
+library(sf)
+library(maps)
+library(dplyr)
+library(urbnmapr)
+library(tidyverse)
+library(leaflet)
+library(tigris)
+library(geosphere)
+```
+
+## Damage from Storms
+
+### 1.a State Level Monetary Damage in the United States
+
+```{r 1.a state level choropleth maps, echo=FALSE}
+# Load the map data for states
+states_map <- map_data('state')
+# calculate aggregate each row's damage 
+storm_data$total_damage <- rowSums(storm_data[, c('DAMAGE_PROPERTY_USD', 'DAMAGE_CROPS_USD')], na.rm = TRUE)
+# group by state for total damage of each state
+damage_data <- storm_data %>%
+  group_by(STATE) %>%
+  summarise(total_damage = sum(total_damage, na.rm = TRUE))
+# low case STATE to match data name for merge
+damage_data$STATE <- tolower(damage_data$STATE)
+# merge state map data together
+storms_damage <- merge(states_map, damage_data, by.x = 'region', by.y = 'STATE')
+# Create choropleth map
+p1 <- ggplot(storms_damage, aes(map_id = region, fill = total_damage/10000000)) +
+  geom_map(map = states_map) +
+  scale_fill_gradient(name = "Total Damage(millions)", low = "cornflowerblue", high = "darkblue") +
+  expand_limits(x = states_map$long, y = states_map$lat) +
+  coord_map('polyconic') +
+  labs(title = "Total Damage by Storms in Millions by States from Year 2017 - Year 2022") +
+  theme_void() # remove background elements
+# add state abbreviations to the figure
+centroids <- data.frame(region = tolower(state.name), long = state.center$x, lat = state.center$y)
+centroids$abb <- state.abb[match(centroids$region, tolower(state.name))]
+#combine with p1
+p2 <- p1 + with(
+  centroids, annotate(geom = 'text', x = long, y = lat, label = abb, size =1.5, color = 'white'))
+# update theme
+theme_g <- theme(plot.title = element_text(size = 15, hjust = 0.5, colour = 'black'),
+               legend.title= element_text(hjust = 0.7 ,vjust=0.7, size=8),
+               legend.text = element_text(size=6),
+               plot.margin = margin(0.5,0.5,0.5,0.5,'cm'))
+p2+theme_g
+```
+
+### 1.a County Level Monetary Damage in the United States
+
+```{r install urbnmapr package,echo=FALSE}
+# install.packages("devtools")
+devtools::install_github("UrbanInstitute/urbnmapr")
+```
+
+```{r county level choropleth maps, echo=FALSE}
+county_map <- map_data('county')
+
+# Filter and group by county of total damage
+## county_damage <- storm_data %>% 
+##  filter(CZ_TYPE == 'C') %>% 
+##  group_by(CZ_NAME) %>%
+##  summarise(total_damage_county = sum(total_damage, na.rm = TRUE))
+
+# Convert CZ_NAME to lowercase to match data name for merge
+storm_data$CZ_NAME <- tolower(storm_data$CZ_NAME)
+# rename column subregion to CZ_NAME
+county_map <- county_map %>% rename(CZ_NAME = subregion)
+
+# merge 
+#merge_county_damage <- merge(county_map, county_damage, by.x = 'subregion', by.y = 'CZ_NAME', all.x = TRUE)
+merge_county_damage <- left_join (
+  county_map, 
+  group_by(storm_data, CZ_NAME) %>%
+    summarise(total_damage_county = sum(ifelse(CZ_TYPE == 'C', total_damage, 0))), by = "CZ_NAME")
+
+# Create the plot with log scale
+p3_log <- ggplot(merge_county_damage, aes(map_id = CZ_NAME, fill = log10(total_damage_county + 1))) +
+  geom_map(map = county_map) +
+  scale_fill_gradient(name = "Total Damage(log10 scale)", low = "cornflowerblue", high = "darkblue") +
+  expand_limits(x = county_map$long, y = county_map$lat) +
+  coord_map('polyconic') +
+  labs(title = "Total Damage by Storms (log10 scale) at County level in U.S from Year 2017 - Year 2022") +
+  theme_void()
+
+p3_log
+```
+
+### 1.b Density of Injuries and Deaths caused by severe events in the United States from Year 2017 - Year 2022
+
+```{r 1.b density maps - injury, echo=FALSE, warning=FALSE, message = FALSE}
+
+state_data <- storm_data %>%
+  group_by(STATE) %>%
+  summarise(Total_Injuries = sum(INJURIES_DIRECT + INJURIES_INDIRECT, na.rm = TRUE),
+            Total_Deaths = sum(DEATHS_DIRECT + DEATHS_INDIRECT, na.rm = TRUE))
+
+# Sum of total injuries and deaths nationwide
+sum_nation_injury <- sum(state_data$Total_Injuries, na.rm = TRUE)
+sum_nation_death <- sum(state_data$Total_Deaths, na.rm = TRUE)
+
+# Load US state boundaries data
+states <- tigris::states()
+
+# Convert state names to lowercase for consistency
+states$NAME <- tolower(states$NAME)
+state_data$STATE <- tolower(state_data$STATE)
+
+# Merge state boundaries data with injuries and deaths data
+merge_states <- left_join(states, state_data, by = c("NAME" = "STATE"))
+
+# Calculate proportions of injuries and deaths
+merge_states <- mutate(merge_states,
+                       proportions_injuries = Total_Injuries / sum_nation_injury,
+                       proportions_deaths = Total_Deaths / sum_nation_death)
+
+# Remove rows with missing or NaN values in Total_Injuries column
+merge_states <- merge_states %>% 
+  filter(!is.na(Total_Injuries) & !is.nan(Total_Injuries))
+
+quantile_bounds <- quantile(merge_states$Total_Injuries, c(0, 0.2, 0.4, 0.6, 0.8, 1.0), na.rm = TRUE)
+
+# Add a column of the quantile category
+merge_states$Injuries_quantile <- cut(merge_states$Total_Injuries, quantile_bounds,
+                                      labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%"),
+                                      include.lowest = TRUE)
+
+# Generate a discrete color palette with 5 values
+palette <- colorRampPalette(c("#559999", "grey80", "#BB650B"))(5)
+
+# Plot the map for injuries quantile
+ggplot() +
+  geom_sf(data = merge_states, aes(fill = Injuries_quantile)) +
+  scale_fill_manual(values = palette) +
+  labs(fill = "Injuries Rate Percentile") +
+  labs(title = "Density of Severe Events by Injuries at State Level") +
+  theme(plot.title = element_text(hjust = 0.5)) +  # Center the title
+  theme_minimal() +  # Use a minimal theme
+  geom_sf_text(data = merge_states, aes(label = STUSPS), size = 3, color = "black", check_overlap = TRUE) +  # Add state names
+  theme(axis.text = element_blank(), axis.title = element_blank()) +  # Remove axis labels
+  theme(
+    # plot.margin = margin(1, 1, 1, 1, "cm"),  # Adjust plot margins
+    # plot.background = element_rect(fill = "white"),  # Set plot background color
+   #  panel.background = element_rect(fill = "white"),  # Set panel background color
+    legend.position = "bottom"  # Position the legend at the bottom
+  ) +
+  coord_sf(xlim = c(-125, -66), ylim = c(24, 50), expand = FALSE) +
+  theme(
+    plot.title = element_text(size = 14),  # Adjust title font size
+    legend.text = element_text(size = 8),  # Adjust legend font size
+    legend.title = element_text(size = 9)  # Adjust legend title font size
+  ) +
+  theme(legend.key.size = unit(1, "cm"))
+
+```
+
+
+
+```{r 1.b density maps - death, echo=FALSE, warning=FALSE, message = FALSE}
+# Find the quantile bounds for deaths
+quantile_bounds_death <- quantile(merge_states$Total_Deaths, c(0, 0.2, 0.4, 0.6, 0.8, 1.0), na.rm = TRUE)
+
+# Add a column of the quantile category for deaths
+merge_states$Deaths_quantile <- cut(merge_states$Total_Deaths, quantile_bounds_death,
+                                    labels = c("0-20%", "20-40%", "40-60%", "60-80%", "80-100%"),
+                                    include.lowest = TRUE)
+
+# Plot the map for deaths quantile
+ggplot() +
+  geom_sf(data = merge_states, aes(fill = Deaths_quantile)) +
+  scale_fill_manual(values = palette) +
+  labs(fill = "Deaths Rate Percentile") +
+  labs(title = "Density of Severe Events by Deaths at State Level") +
+  theme(plot.title = element_text(hjust = 0.5)) +  # Center the title
+  theme_minimal() +  # Use a minimal theme
+  geom_sf_text(data = merge_states, aes(label = STUSPS), size = 3, color = "black", check_overlap = TRUE) +  # Add state names
+  theme(axis.text = element_blank(), axis.title = element_blank()) +  # Remove axis labels
+  theme(
+    legend.position = "bottom"  # Position the legend at the bottom
+  ) +
+  coord_sf(xlim = c(-125, -66), ylim = c(24, 50), expand = FALSE) +
+  theme(
+    plot.title = element_text(size = 14),  # Adjust title font size
+    legend.text = element_text(size = 8),  # Adjust legend font size
+    legend.title = element_text(size = 9)  # Adjust legend title font size
+  ) +
+  theme(legend.key.size = unit(1, "cm"))
+
+# # calculate total injuries and death from direct and indirect
+# state_data <- storm_data %>%
+#   group_by(STATE) %>%
+#   summarise(Total_Injuries = sum(INJURIES_DIRECT + INJURIES_INDIRECT, na.rm = TRUE),
+#             Total_Deaths = sum(DEATHS_DIRECT + DEATHS_INDIRECT, na.rm = TRUE))
+# 
+# # Sum of total injuries and deaths nationwide
+# sum_nation_injury <- sum(state_data$Total_Injuries, na.rm = TRUE)
+# sum_nation_death <- sum(state_data$Total_Deaths, na.rm = TRUE)
+# 
+# # Load US state boundaries data
+# states <- tigris::states()
+# 
+# # Convert state names to lowercase for consistency
+# states$NAME <- tolower(states$NAME)
+# state_data$STATE <- tolower(state_data$STATE)
+# 
+# # Merge state boundaries data with injuries and deaths data
+# merge_states <- left_join(states, state_data, by = c("NAME" = "STATE"))
+# 
+# # Calculate proportions of injuries and deaths
+# merge_states <- mutate(merge_states,
+#                       proportions_injuries = Total_Injuries / sum_nation_injury,
+#                       proportions_deaths = Total_Deaths / sum_nation_death)
+# 
+# # Plot the map for injuries
+# plot_injuries <- ggplot(data = merge_states) +
+#   geom_sf(aes(fill = proportions_injuries), color = "white", size = 0.2) +
+#   scale_fill_viridis_c(name = 'Proportion of Injuries', labels = scales::percent_format(accuracy = 1),
+#                        na.value = 'grey') +
+#   labs(title = "Density of Severe Events by Injuries at State Level from Year 2017 - Year 2022") +
+#   geom_sf_text(aes(label = NAME), size = 3, color = "black", check_overlap = TRUE) +
+#   theme_minimal() +
+#   coord_sf(xlim = c(-125, -66), ylim = c(24, 50), expand = FALSE)
+# 
+# # Plot the map for deaths
+# plot_deaths <- ggplot(data = merge_states) +
+#   geom_sf(aes(fill = proportions_deaths), color = "white", size = 0.2) +
+#   scale_fill_viridis_c(name = 'Proportion of Deaths', labels = scales::percent_format(accuracy = 1),
+#                        na.value = 'grey') +
+#   labs(title = "Density of Severe Events by Deaths at State Level from Year 2017 - Year 2022") +
+#   geom_sf_text(aes(label = NAME), size = 3, color = "black", check_overlap = TRUE) +
+#   theme_minimal() +
+#   coord_sf(xlim = c(-125, -66), ylim = c(24, 50), expand = FALSE)
+# 
+# plot_deaths
+# plot_injuries
+```
+
+
+
+#### Discuss briefly which of the two approaches provides a better visual summary of the distribution of the destructive effects of storms. 
+
+In my opinion, I'd more prefer density map and state level choropleth map that provide a better visual to understand how the impact of severe weather. For county level, it is too disorder and unable to present the distribution with colors. I think density map create a better comparation that i had two maps one focus on the death related to severe event and another on focus on the injury related to severe event, it allows readers to better observe how the severe event impact each state varies by impact either death or injury with the percentile range.
+
+## 2. Location of Severe Events
+
+### 2.a Interactive Map of Severe Weather Events
+
+```{r 2.a Interactive Map, echo=FALSE, warning=FALSE}
+overone_death <- storm_data %>%
+  filter(DEATHS_DIRECT >= 1 | DEATHS_INDIRECT >= 1 & !is.na(BEGIN_LAT) & !is.na(BEGIN_LON)) 
+#  result in at least one death that either of it should equal or greater than 1
+
+# Extract relevant information for the popup
+popup_info <- paste("<b>Event Type:</b>", overone_death$EVENT_TYPE, "<br>",
+                    "<b>Begin Location:</b>", overone_death$BEGIN_LOCATION, "<br>",
+                    "<b>End Location:</b>", overone_death$END_LOCATION, "<br>",
+                    "<b>Begin Date:</b>", overone_death$BEGIN_DATE_TIME, "<br>",
+                    "<b>End Date:</b>", overone_death$END_DATE_TIME, "<br>",
+                    "<b>Direct Deaths:</b>", overone_death$DEATHS_DIRECT, "<br>",
+                    "<b>Indirect Deaths:</b>", overone_death$DEATHS_INDIRECT, "<br>",
+                    "<b>Reported Source Deaths:</b>", overone_death$SOURCE)
+# create interactive map with leaflet
+leaflet(data = overone_death) %>%
+  addProviderTiles("CartoDB.Positron") %>%  
+  addMarkers(lng = ~BEGIN_LON, lat = ~BEGIN_LAT, popup = ~popup_info) %>%
+  setView(lng = -98.583333, lat = 39.833333, zoom = 4) # restrict only U.S.
+```
+
+### 2.b Color by type of weather event
+
+```{r 2.b Color by type of weather event, echo=FALSE, warning=FALSE}
+# view all event types
+unique_event_types <- unique(overone_death$EVENT_TYPE)
+# all frequency for each types
+event_type_frequency <- table(overone_death$EVENT_TYPE)
+# decide to give color on 6 personalized types, rest of other in one color
+# assign color on each type
+event_type_colors <- c("Flood" = "blue",
+                       "Thunderstorm Wind" = "purple",
+                       "Tornado" = "orange",
+                       "Heat" = "red",
+                       "Chill" = "yellow",
+                       "Other" = "gray"
+    ) 
+# categorize event types 
+overone_death_event <- overone_death %>%
+  mutate(EVENT_TYPE = case_when(
+    EVENT_TYPE %in% c("Flash Flood", "Flood", "Coastal Flood", "Lakeshore Flood") ~ "Flood",
+    EVENT_TYPE %in% c("Thunderstorm Wind", "Marine Thunderstorm Wind", "Marine Strong Wind") ~ "Thunderstorm Wind",
+    EVENT_TYPE %in% c("Tornado", "Waterspout") ~ "Tornado",
+    EVENT_TYPE %in% c("Heat", "Excessive Heat") ~ "Heat",
+    EVENT_TYPE %in% c("Cold/Wind Chil", "Extreme Cold/Wind Chill", "High Wind", "Strong Wind") ~ "Wind",
+    TRUE ~ "Other"  # Collapse other event types into "Other"
+  ))
+
+# Map event types to colors
+overone_death_event$color <- event_type_colors[overone_death_event$EVENT_TYPE]
+
+# Create map
+leaflet(data = overone_death_event) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addCircleMarkers(~BEGIN_LON, ~BEGIN_LAT, color = ~color,
+                   radius = 5, fillOpacity = 0.8, popup = ~popup_info) %>%
+  addLegend(position = "bottomright", colors = unique(overone_death_event$color),
+            labels = names(event_type_colors), title = "Weather Event Types")
+
+```
+
+### 2.c Cluster
+
+```{r 2.c Cluster, echo=FALSE, warning=FALSE}
+
+# Create map with marker clustering
+leaflet(data = overone_death_event) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addCircleMarkers(lng = ~BEGIN_LON, lat = ~BEGIN_LAT, clusterOptions = markerClusterOptions(),
+                   radius = 5, fillOpacity = 0.8, popup = ~popup_info, color = ~color)
+
+```
+
+## 3. Severe Events and Cities
+##### tried , code doesnt work....
