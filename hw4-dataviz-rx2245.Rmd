@@ -1,0 +1,218 @@
+---
+title: "Assignment 4"
+author: "Cherie"
+date: "2024-04-15"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+# import library
+library(shiny)
+library(DT)
+library(dplyr)
+library(lubridate)
+library(readr)
+library(ggplot2)
+library(plotly)
+library(tidyr)
+
+```
+
+```{r import dataset, include=FALSE}
+# read csv file 
+b <- read.csv('/Users/yemei/Documents/GitHub/course_content/Exercises/11_billboard_GRADED/billboard.csv') 
+a <- read.csv('/Users/yemei/Documents/GitHub/course_content/Exercises/11_billboard_GRADED/audio_features.csv') 
+
+# data processing
+# Convert week_id from chr to date type
+b$Week_Date <- mdy(b$week_id)
+# Check if there are any NA values
+sum(is.na(b$Week_Date))
+# gain year 
+b <- b %>%
+    mutate(Year = year(Week_Date))
+
+b_1 <- b %>% 
+  group_by(song, performer, peak_position, Year) %>%
+  summarise(Total_Weeks = max(weeks_on_chart), 
+            #ranked by total weeks in the billboard Top 100
+            .groups = 'drop')
+
+
+
+```
+
+
+### 1) Top songs
+
+```{r , echo=FALSE}
+ui <- fluidPage(
+  titlePanel("Top Billboard Songs Analysis"),
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("yearRange", "Select the year range:",
+                  min = min(b_1$Year, na.rm = TRUE),
+                  max = max(b_1$Year, na.rm = TRUE),
+                  value = c(2010, 2021), step = 1)
+    ),
+    mainPanel(
+      DTOutput("table")
+    )
+  )
+)
+
+
+server <- function(input, output) {
+  output$table <- renderDT({
+    f_b <- b_1 %>%
+      filter(Year >= input$yearRange[1], Year <= input$yearRange[2]) %>%
+      arrange(desc(Total_Weeks)) %>%
+      slice(1:20) # only top 20 songs 
+
+    datatable(f_b, options = list(pageLength = 20))
+  })
+}
+
+shinyApp(ui, server)
+```
+
+
+### 2) Top Artists
+
+```{r , echo=FALSE}
+
+ui <- fluidPage(
+    titlePanel("Billboard Artist Song Rankings"),
+    sidebarLayout(
+        sidebarPanel(
+            textInput("artistName", "Enter Artist Name:", value = ""),
+            sliderInput("yearRange", "Select Year Range:", 
+                        min = min(b$Year, na.rm = TRUE), 
+                        max = max(b$Year, na.rm = TRUE), 
+                        value = c(min(b$Year, na.rm = TRUE), max(b$Year, na.rm = TRUE)),
+                        step = 1),
+            actionButton("submit", "Submit", icon = icon("search"))
+        ),
+        mainPanel(
+            plotlyOutput("rankChart") # apply plotly 
+        )
+    )
+)
+
+
+server <- function(input, output) {
+    
+    reactiveData <- reactive({
+        req(input$submit > 0)  
+        isolate({
+            artist <- input$artistName
+            year_range <- input$yearRange
+            b %>%
+                filter(tolower(performer) == tolower(artist),
+                       Year >= year_range[1],
+                       Year <= year_range[2]) %>%
+                arrange(week_id) %>%
+                group_by(week_id) %>%
+                mutate(Rank = rank(-week_position, ties.method = "first"))  # Calculate ranks within each week
+        })
+    })
+  
+    output$rankChart <- renderPlotly({
+        data <- reactiveData()
+        req(nrow(data) > 0)  
+        
+        # 
+        p <- plot_ly(data, x = ~Week_Date, y = ~Rank, text = ~song,
+                     type = 'scatter', mode = 'lines+markers',
+                     hoverinfo = 'text+y+x', 
+                     line = list(shape = 'spline'),
+                     color = ~song,
+                     marker = list(size = 8)) %>%
+            layout(title = paste("Billboard Rankings Over Time for", input$artistName),
+                   xaxis = list(title = "Date"),
+                   yaxis = list(title = "Rank", autorange = "reversed"))  
+        p  
+    })
+}
+
+shinyApp(ui = ui, server = server)
+
+
+
+```
+
+
+
+
+### 3) Audio Features
+
+```{r , echo=FALSE, warning=FALSE}
+# join two dataset
+ab <- left_join(b,a, by= 'song_id')
+# clean genre type
+ab <- ab %>%
+  mutate(spotify_genre = gsub("\\['|'\\]|'", "", spotify_genre)) %>%
+  separate_rows(spotify_genre, sep = ",\\s*") %>%
+  select(-song.y, -performer.y)
+
+# Create categories for top 1, top 10, and top 20
+ab <- ab %>%
+  mutate(Top_Category = case_when(
+    peak_position == 1 ~ "Top 1",
+    peak_position <= 10 ~ "Top 10",
+    peak_position <= 20 ~ "Top 20",
+    TRUE ~ "Below Top 20"
+  ))
+
+ui <- fluidPage(
+  titlePanel("Billboard and Spotify Data Visualization"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("genre", "Select Genre(s)", choices = unique(ab$spotify_genre), multiple = TRUE),
+      sliderInput("yearRange", "Select Year Range",
+                  min = min(ab$Year), max = max(ab$Year),
+                  value = c(min(ab$Year), max(ab$Year))),
+      textInput("artistName", "Enter Artist Name"),
+      checkboxGroupInput("topCategory", "Billboard Chart Position",
+                         choices = c("Top 1", "Top 10", "Top 20")),
+      actionButton("submit", "Update View")
+    ),
+    mainPanel(
+      plotlyOutput("audioPlot")
+    )
+  )
+)
+
+
+server <- function(input, output) {
+  f_ab <- reactive({
+    req(input$submit>0)
+    isolate({
+        ab %>%
+        filter(
+          (spotify_genre %in% input$genre) &
+          (Year >= input$yearRange[1] & Year <= input$yearRange[2]) &
+          (tolower(performer.x) == tolower(input$artistName)) &
+          (Top_Category %in% input$topCategory)
+        )
+    })
+  })
+
+  output$audioPlot <- renderPlotly({
+    data <- f_ab()
+    req(nrow(data) > 0)
+    # chose the audio features of danceability and energy as axes
+    plot_ly(data, x = ~danceability, y = ~energy, type = 'scatter', mode = 'markers',
+            text = ~paste("Artist:", performer.x, "<br>Song:", song.x, "<br>Year:", Year, "<br>Peak Position:", peak_position),
+            color = ~song.x,
+            hoverinfo = "text", marker = list(size = 10)) %>%
+      layout(title = 'Danceability vs. Energy',
+             xaxis = list(title = 'Danceability'),
+             yaxis = list(title = 'Energy'))
+  })
+}
+
+shinyApp(ui, server)
+
+```
