@@ -21,7 +21,11 @@ Question 1: Visualize how the mode of meeting for the first time has changed ove
 Chart 1 this graph is a  line chart to draw a trend of the type of people first meet over the years, it included all types of the meeting.
 Applied this graph, it was able to show all trend of people's first meet. With the color add-in, we able to observe the change by years as well as the popular meeting type. 
 
+<<<<<<< Updated upstream
 ```{r, echo=FALSE}
+=======
+```{r, include = FALSE, echo=FALSE}
+>>>>>>> Stashed changes
 meeting_counts <- data %>% count(Q21A_Year, meeting_type)
 meeting_counts_filtered <- meeting_counts %>% filter(Q21A_Year != "Refused")
 meeting_counts_filtered$Q21A_Year <- as.numeric(as.character(meeting_counts_filtered$Q21A_Year))
@@ -32,9 +36,13 @@ ggplot(data = meeting_counts_filtered, aes(x = Q21A_Year, y = n, group = meeting
   scale_x_continuous(breaks = breaks, labels = as.character(breaks))
 ```
 Chart 2: this graph draw a bar chart that provide each type of meeting changed by years. With individual bar box, it was able to identify the trend of various meeting type case by case. With the line trend added, it helped the reader to recognize the change as well since some are flatted and some are curved. 
-# for min year, i use the min-1 to have even distrubuted in year for better visulization, that's what i could do, but please have suggestion for any better way, thank you!
+# for min year, i use the min-1 to have even distrubuted in year for better visulization, that's what i could do
 
+<<<<<<< Updated upstream
 ```{r, echo=FALSE}
+=======
+```{r, include = FALSE, echo=FALSE}
+>>>>>>> Stashed changes
 min_year <- min(meeting_counts_filtered$Q21A_Year, na.rm = TRUE) - 1   
 max_year <- max(meeting_counts_filtered$Q21A_Year, na.rm = TRUE) 
 breaks <- seq(min_year, max_year, by = 10)
