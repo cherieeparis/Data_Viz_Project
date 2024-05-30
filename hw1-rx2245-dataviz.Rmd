@@ -13,7 +13,7 @@ library(tidyr)
 library(DT)
 library(plotly)
 library(stringr)
-data <- readRDS("~/dataviz/HCMST_couples.rds")
+data <- readRDS("~/HCMST_couples.rds")
 ```
 
 Question 1: Visualize how the mode of meeting for the first time has changed over the years.
