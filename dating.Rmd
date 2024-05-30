@@ -6,14 +6,14 @@ date: "2024-02-14"
 Assignment 1 - Dating
 
 Import all packages
-```{r}
+```{r import packages, include = FALSE, echo=FALSE}
 library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(DT)
 library(plotly)
 library(stringr)
-data <- readRDS("~/HCMST_couples.rds")
+data <- readRDS("HCMST_couples.rds")
 ```
 
 Question 1: Visualize how the mode of meeting for the first time has changed over the years.
@@ -21,7 +21,7 @@ Question 1: Visualize how the mode of meeting for the first time has changed ove
 Chart 1 this graph is a  line chart to draw a trend of the type of people first meet over the years, it included all types of the meeting.
 Applied this graph, it was able to show all trend of people's first meet. With the color add-in, we able to observe the change by years as well as the popular meeting type. 
 
-```{r}
+```{r, echo=FALSE}
 meeting_counts <- data %>% count(Q21A_Year, meeting_type)
 meeting_counts_filtered <- meeting_counts %>% filter(Q21A_Year != "Refused")
 meeting_counts_filtered$Q21A_Year <- as.numeric(as.character(meeting_counts_filtered$Q21A_Year))
@@ -34,7 +34,7 @@ ggplot(data = meeting_counts_filtered, aes(x = Q21A_Year, y = n, group = meeting
 Chart 2: this graph draw a bar chart that provide each type of meeting changed by years. With individual bar box, it was able to identify the trend of various meeting type case by case. With the line trend added, it helped the reader to recognize the change as well since some are flatted and some are curved. 
 # for min year, i use the min-1 to have even distrubuted in year for better visulization, that's what i could do, but please have suggestion for any better way, thank you!
 
-```{r}
+```{r, echo=FALSE}
 min_year <- min(meeting_counts_filtered$Q21A_Year, na.rm = TRUE) - 1   
 max_year <- max(meeting_counts_filtered$Q21A_Year, na.rm = TRUE) 
 breaks <- seq(min_year, max_year, by = 10)
@@ -68,7 +68,7 @@ Question 2: Create one (1) visualization to show the relationship between a resp
 
 I applied scatter plot to draw the relationship between the couple's age by the gender. It shown that respondent's age and partner's age have positive correlation by gender, which means the couple's age are closely when they meet.
 
-```{r}
+```{r, echo=FALSE}
 ggplot(data, aes(x=ppage, y=Q9, color=ppgender)) +
   geom_point(alpha =0.5) +
   geom_smooth(method = 'lm', se = FALSE) +
@@ -83,7 +83,7 @@ Question 3: Explore how the political affiliation of partners affects how couple
 Chart 1:
 I applied bar chart to draw the how respondent and partner's political affiliation looks like. It shown that across the survey, the respondent are more likely recognized self as more democrat and their partner are more likely recognized self as independent.
 
-```{r}
+```{r, echo=FALSE}
 combined_party <- data.frame(Party_Affiliation = c(data$partyid7, data$w6_q12),
                             Group = rep(c("Respondent", "Partner"), each = nrow(data)))
 
@@ -103,7 +103,7 @@ ggplot(counts_df, aes(x = Party_Affiliation, y = Count, fill = Group)) +
   theme_minimal()
 ```
 Chart 2: For this chart, I applied box plot that draw relationship duration in terms of partner's political affiliation. It shown that partner who are undecided or independent are more likely to keep their relationship longer. 
-```{r}
+```{r, echo=FALSE}
 ggplot(data, aes(x = w6_q12, y = duration)) +
   geom_boxplot() +
   coord_flip() +
@@ -118,7 +118,7 @@ Question 4
 
 Chart 1: 
 For this chart i create a bar chart to show which month does the couple have their first meet. We can observe that couple were more likely initial meet each other in September of the year.
-```{r}
+```{r, echo=FALSE}
 ggplot(subset(data, Q21A_Month != "Refused" ), aes(x = Q21A_Month, fill = Q21A_Month)) + 
   geom_bar() +
   labs(title = "Month First Meet", x = "Month", y = "Count") + 
@@ -127,7 +127,7 @@ ggplot(subset(data, Q21A_Month != "Refused" ), aes(x = Q21A_Month, fill = Q21A_M
 
 Chart 2: I want to observe what age when the couple usually to meet their female or male partner. In this chart, we can observe that people were more likely first meet their female or male partner when they between 17-21 years old. In question 5, I will add interactive with plotly to make it more readable. 
 
-```{r}
+```{r, echo=FALSE}
 ggplot(data, aes(x = age_when_met, fill = ppgender)) + 
   geom_bar(width = 0.9, position = position_dodge(width=0.9)) +
   labs(title = "Month First Meet", x = "Month", y = "Count") + 
@@ -138,7 +138,7 @@ ggplot(data, aes(x = age_when_met, fill = ppgender)) +
 Question 5:
 
 Chart 1:
-```{r}
+```{r, echo=FALSE}
 gg1 <- ggplot(data, aes(x = ppage, y = Q9, color = ppgender)) +
   geom_point(alpha = 0.5, size = 2) + 
   geom_smooth(method = 'lm', color = "black", lwd = 1, se = FALSE) +
@@ -151,7 +151,7 @@ ggplotly(gg1)
 
 
 Chart 2:
-```{r}
+```{r, echo=FALSE}
 gg2 <- ggplot(data, aes(x = age_when_met, fill = ppgender)) + 
   geom_bar(width = 0.9, position = position_dodge(width=0.9)) +
   labs(title = "Month First Meet", x = "Month", y = "Count") + 
@@ -161,7 +161,7 @@ ggplotly(gg2)
 
 
 Question 6: I chose the variable we used in above and rename it since thats the most interested variable i had used so far in this data. 
-```{r}
+```{r, echo=FALSE}
 selected_data <- subset(data, select = c(Q21A_Year, Q21A_Month, ppage, Q9, ppgender, partyid7, w6_q12, Q10, Q11))
 names(selected_data) <- c("first met year","first met month", "age", "partner age", "gender", "party", "partner party", "partner education", "partner mother education")
 
