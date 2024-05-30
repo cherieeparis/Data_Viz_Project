@@ -6,7 +6,7 @@ date: "2024-03-06"
 ---
 
 ```{r import data, include = FALSE, echo=FALSE}
-storm_data<- read.csv("/Users/yemei/Documents/GitHub/course_content/Exercises/07_severe_weather_GRADED/data/storms.csv")
+storm_data<- read.csv("storms.csv")
 ```
 
 ```{r import packages, include = FALSE, echo=FALSE}
